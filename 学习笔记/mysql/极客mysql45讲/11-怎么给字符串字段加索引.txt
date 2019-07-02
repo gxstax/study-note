@@ -1,0 +1,71 @@
+-- 测试用表
+ create table SUser (
+	ID bigint unsigned primary key,
+	name varchar(64),
+	f1 varchar(8),
+	f2 varchar(8),
+	email varchar(64)
+ )
+ 
+ -- 测试数据插入存储过程
+  delimiter ;; 
+	create procedure idata2()
+	begin
+		declare i int;
+		set i=1;
+		while(i<10) do
+			insert into SUser values(i, "name", CONCAT('f1-',CAST(i as char(3))), CONCAT('f2-',CAST(i as char(3))), CONCAT('test',CAST(i as char(3)),'@mysql.com'));
+			set i=i+1;
+		end while;
+	end;;
+	delimiter ;
+	call idata2();
+	
+-- 这里分别创建两种类别的索引项
+	alter table SUser add index index1(email);
+	或者
+	alter table SUser add index index2(email(6));
+	
+	
+	这里使用前缀索引的好处是可以节省空间，但是会引入一个新的问题：
+	1.就是我们这里是前缀索引，如果我们要查找的就是email这个字段，我们从前缀
+	  索引中找到合适的值，然后找到对应的id,需要回表去查一级索引；
+	  如果我们直接用index1，就可以少一次回表操作；
+	2.如果我们不是查找email,这样index1和index2都需要回表，两个的效率差别似乎是一样的，
+	  但是我们想，如果实际情况中，我们的email前6为的差异想特别小，那么在使用index2,无疑就
+	  重复的判断下一条是否也满足，这样就会增加回表的开销；
+	
+	  所以针对上面的问题，设置合适的前缀索引长度就显得尤为重要。
+	  要设定前缀索引合适的长度，首先我们要看下这个字段的差异性：
+	  a: 我们先看下这个列上有多少不同的值：
+		  select count(distinct email) as L from SUser;
+	  b: 然后依次选取不同长度的前缀来看这个值
+		  select 
+			count(distinct left(email,4)) as L4,
+			count(distinct left(email,5)) as L5,
+			count(distinct left(email,6)) as L6,
+			count(distinct left(email,7)) as L7
+		  from SUser;
+		  
+		  
+		  这里我们可以算一下精度Ln/L, Ln是前缀索引的差异值，L是数据总条数，
+		  一般精度在95%就可以；
+	3. 倒叙存储方式，对于一组数据如果后端差异性较大，我们可以采用倒叙存储，例如学号：
+	       1040551001
+		   1040551002
+		   1040551003
+		   1040551004
+		 前端都是一样的编号，这时候我们在数据库中可以倒叙存储：
+		   1001550401
+		   2001550401
+		   3001550401
+		   4001550401
+		   5001550401
+		 这样我们设置前缀索引的时候就可以只用4个字符串就可以搞定了；
+	4. hash 字段存储
+	
+	
+	
+	
+	
+	

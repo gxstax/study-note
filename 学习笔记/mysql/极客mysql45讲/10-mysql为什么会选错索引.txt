@@ -1,0 +1,94 @@
+创建表t的脚本:
+
+	create table t (
+		id int(11) not null,
+		a int(11) DEFAULT NULL,
+		b int(11) DEFAULT NULL,
+		PRIMARY KEY (id),
+		KEY a(a),
+		KEY b(b)
+	)ENGINE=InnoDB;
+
+插入10万条记录的存储过程:
+	delimiter ;; 
+	create procedure idata()
+	begin
+		declare i int;
+		set i=1;
+		while(i<100000) do
+			insert into t values(i, i, i);
+			set i=i+1;
+		end while;
+	end;;
+	delimiter ;
+	call idata();
+
+分析语句：
+	mysql> select * from t where a between 10000 and 20000;
+	
+	理论上这条查询语句肯定是要用到索引a,这是毋庸置疑的，事实结果也是如此；
+	
+    那么我们来分析一下下面这种情况：
+	
+	-------------------------------------------------------------------
+	sessionA                      |             sessionB
+	-------------------------------------------------------------------
+	start transaction with        |       
+    consistent snapshot;          |
+	--------------------------------------------------------------------
+	                              | delete from t;    
+	                              | call idata();
+	--------------------------------------------------------------------
+	                              | explain select * from t where a 
+								  | between 10000 and 20000;
+    ---------------------------------------------------------------------
+    commit;	
+	---------------------------------------------------------------------
+	
+	
+	--- 上面这个事务的执行流程
+	select @@global.tx_isolation,@@tx_isolation,version(),"session A";
+	  #Session A 开启
+		start transaction with consistent snapshot;
+
+		select now() ;
+
+	  #Session B
+		select @@global.tx_isolation,@@tx_isolation,version(),"session B";
+
+	  delete from t;
+		call idata();
+		select now();
+	  explain select * from t where a between 10000 and 20000;
+
+	#SessionA 事务提交
+	commit;
+	
+	
+	
+	
+	
+	
+	explain select * from t force index(a) where a between 10000 and 20000; force index(1):强制使用索引a
+	
+	analyze table t; 重新统计索引信息;
+	
+	show index from t; 显示索引统计信息
+	
+	# 这里使用了错误的索引 b 查询耗时5ms
+	explain select * from t where a BETWEEN 1 and 1000 and b BETWEEN 50000 and 100000 ORDER BY b limit 1;
+
+	# 这里强制使用索引a 查询耗时 1ms
+	explain select * from t FORCE INDEX(a) where a BETWEEN 1 and 1000 and b BETWEEN 50000 and 100000 ORDER BY b limit 1;
+
+	# 优化第一条语句，让查询优化器把索引用到a上来 ，这时候查询就比之前快多了
+	explain select * from t where a BETWEEN 1 and 1000 and b BETWEEN 50000 and 100000 ORDER BY b,a limit 1;
+
+	
+
+	
+	
+	
+	
+	
+	
