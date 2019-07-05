@@ -1,0 +1,42 @@
+
+## sql99 的交叉连接，也就是笛卡尔积连接
+EXPLAIN SELECT * from player CROSS JOIN team;
+
+## sql99的自然连接
+SELECT * FROM player NATURAL JOIN team;
+
+# sql92的方式使用连接
+SELECT a.player_id, b.team_id, a.player_name from player AS a, team AS b where a.team_id = b.team_id;
+
+# 自然连接的on条件
+SELECT player.player_id,player.player_name, team.team_id FROM player JOIN team ON team.team_id = player.team_id;
+
+# 查询球员的身高等级
+SELECT player.player_name, height_grades.height_level FROM player JOIN height_grades ON player.height BETWEEN height_grades.height_lowest AND height_grades.height_highest;
+
+## 使用USING 连接 可以代替ON，会更简便
+SELECT player.player_id, player.player_name, team.team_name FROM player JOIN team USING (team_id);
+
+## LEFT JOIN 左外连接
+SELECT player.player_id, player.player_name, team.team_name FROM player LEFT JOIN team ON player.team_id=team.team_id;
+
+## RIGHT JOIN 右外连接
+SELECT player.player_id, player.player_name, team.team_name FROM player RIGHT JOIN team ON player.team_id=team.team_id;
+
+## FULL JOIN 全连接 （mysql 不支持全连接）
+SELECT player.player_id, player.player_name, team.team_name FROM player FULL JOIN team ON player.team_id=team.team_id;
+
+##自连接 查询身高大于 布雷克-格里芬 的球员信息
+SELECT b.player_name, b.height FROM player AS a JOIN player AS b ON a.player_name='布雷克-格里芬' AND a.height<b.height;
+
+注意：关于性能需要注意的事情：
+1: 控制连接表的数量:
+   多表连接就相当于嵌套for循环一样，非常消耗资源，会让SQL查询性能下降的很严重，因此不要连接不必要的表。在许多DBMS中，也都会有最大连接表的限制。
+
+2: 在连接是不要忘了 WHERE 语句
+   多表连接的目的不是为了做笛卡尔积，而是筛选符合条件的数据行，因此在多表连接的时候不要忘记了WHERE语句，这样可以过滤掉不必要的数据行返回。
+
+3: 使用自连接而不是子查询
+   我们在查看比布雷克-格里芬 高的球员都有谁的时候，可以使用子查询，也可以使用自连接。一般情况下推荐使用自连接，因为在许多DBMS的处理过程中，
+   对于自连接的处理速度要比子查询快得多。你可以这样理解：子查询实际上是通过未知表进行查询后的条件判断，而自连接是通过已知的自身数据表进行条件判断，
+   因此在大多数DBMS中都对自连接处理进行了优化。
