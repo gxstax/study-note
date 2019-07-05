@@ -40,3 +40,9 @@ SELECT b.player_name, b.height FROM player AS a JOIN player AS b ON a.player_nam
    我们在查看比布雷克-格里芬 高的球员都有谁的时候，可以使用子查询，也可以使用自连接。一般情况下推荐使用自连接，因为在许多DBMS的处理过程中，
    对于自连接的处理速度要比子查询快得多。你可以这样理解：子查询实际上是通过未知表进行查询后的条件判断，而自连接是通过已知的自身数据表进行条件判断，
    因此在大多数DBMS中都对自连接处理进行了优化。
+
+
+## 练习题-查询不同身高级别对应球员数量
+SELECT height_grades.height_level,count(height_grades.height_level) 
+	FROM player JOIN height_grades ON player.height BETWEEN height_grades.height_lowest AND height_grades.height_highest
+		GROUP BY height_grades.height_level;
