@@ -1,0 +1,123 @@
+-- 测试表 DDL
+CREATE TABLE tradelog (
+  id int(11) NOT NULL,
+  tradeid varchar(32) DEFAULT NULL,
+  operator int(11) DEFAULT NULL,
+  t_modified datetime DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY tradeid (tradeid),
+  KEY t_modified (t_modified)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- 初始化数据存储过程
+delimiter ;;
+CREATE PROCEDURE tradelog_idata()
+BEGIN
+	DECLARE i INT;
+	SET i = 0;
+	WHILE i < 100000 DO
+			INSERT INTO tradelog VALUES (i, CONCAT('10', i), i, DATE_FORMAT(NOW(),'%Y-%m-%d'));
+		SET i = i+1;
+	END WHILE;
+END;;
+delimiter ;
+
+CALL tradelog_idata();
+
+
+EXPLAIN select count(*) from tradelog where month(t_modified)=7;
+
+
+
+--1: 函数使用不到索引，优化办法1:
+ select count(*) from tradelog where
+     (t_modified >= '2016-7-1' and t_modified<'2016-8-1') or
+     (t_modified >= '2017-7-1' and t_modified<'2017-8-1') or 
+     (t_modified >= '2018-7-1' and t_modified<'2018-8-1');
+
+--2: 格式问题使用不到索引
+-- tradeid是varchar类型，这句使用不到索引
+EXPLAIN select * from tradelog where tradeid=110717;
+-- 因为mysql在字符串和数字比较的时候是把 字符串 转换为数字再进行比较，所以上面的语句相当于：
+mysql> select * from tradelog where  CAST(tradid AS signed int) = 110717;
+-- 这也就是为什么使用不到索引的情况？但是下面这条语句就会用到索引，
+EXPLAIN select * from tradelog where id="83126";
+
+
+EXPLAIN select * from tradelog where tradeid='110717';
+
+
+
+-- 再来看一个例子：
+CREATE TABLE trade_detail (
+  id int(11) NOT NULL,
+  tradeid varchar(32) DEFAULT NULL,
+  trade_step int(11) DEFAULT NULL, /* 操作步骤 */
+  step_info varchar(32) DEFAULT NULL, /* 步骤信息 */
+  PRIMARY KEY (id),
+  KEY tradeid (tradeid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+insert into tradelog values(1, 'aaaaaaaa', 1000, now());
+insert into tradelog values(2, 'aaaaaaab', 1000, now());
+insert into tradelog values(3, 'aaaaaaac', 1000, now());
+
+insert into trade_detail values(1, 'aaaaaaaa', 1, 'add');
+insert into trade_detail values(2, 'aaaaaaaa', 2, 'update');
+insert into trade_detail values(3, 'aaaaaaaa', 3, 'commit');
+insert into trade_detail values(4, 'aaaaaaab', 1, 'add');
+insert into trade_detail values(5, 'aaaaaaab', 2, 'update');
+insert into trade_detail values(6, 'aaaaaaab', 3, 'update again');
+insert into trade_detail values(7, 'aaaaaaab', 4, 'commit');
+insert into trade_detail values(8, 'aaaaaaac', 1, 'add');
+insert into trade_detail values(9, 'aaaaaaac', 2, 'update');
+insert into trade_detail values(10, 'aaaaaaac', 3, 'update again');
+insert into trade_detail values(11, 'aaaaaaac', 4, 'commit');
+
+
+
+
+
+
+
+-- 上面建的表，字符集是utf-8，这个时候，我门去查询 交易日志表为2的所有操作步骤
+
+
+EXPLAIN SELECT * FROM tradelog tl JOIN trade_detail td ON tl.tradeid=td.tradeid WHERE tl.id=2;
+
+
+1	SIMPLE	tl		const	PRIMARY,tradeid	PRIMARY	4	const	1	100.00	
+1	SIMPLE	td		ALL					11	100.00	Using where
+
+
+-- 结果是 trade_tail表的key 是null 没有用到索引， 这个原因是 当从tradelog表中找到ID=2的记录的tradeid：aaaaaaab然后再去trade_detail
+-- 表中去查的时候，由于字符集不同，所以要做一个函数转换，那么sql就相当于下面这个语句：
+select * from trade_detail  where CONVERT(traideid USING utf8mb4)=$L2.tradeid.value; 
+
+-- 你看，用到了函数，所以索引失效了
+
+-- 所以上面的语句优化就有下面两种，一种是修改字符集
+alter table trade_detail modify tradeid varchar(32) CHARACTER SET utf8mb4 default null;
+
+-- 一种是主动做字符集转换
+select d.* from tradelog l , trade_detail d where d.tradeid=CONVERT(l.tradeid USING utf8) and l.id=2; 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
